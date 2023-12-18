@@ -1,4 +1,4 @@
-name: Exporters ONNX Timm / Python - Test
+name: ONNX Runtime slow / Python - Test
 
 on:
   workflow_dispatch:
@@ -24,11 +24,10 @@ jobs:
       uses: actions/setup-python@v2
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Install dependencies for pytorch export
+    - name: Install dependencies for export
       run: |
-        pip install .[tests,exporters]
+        pip install .[tests,onnxruntime]
     - name: Test with unittest
       working-directory: tests
       run: |
-        RUN_SLOW=1 pytest exporters/onnx/ -s -n auto -k "timm" --durations=0
-
+        RUN_SLOW=1 pytest onnxruntime -s -m "run_slow" --durations=0

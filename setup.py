@@ -38,7 +38,7 @@ TESTS_REQUIRE = [
     "invisible-watermark",
 ]
 
-QUALITY_REQUIRE = ["black~=23.1", "ruff>=0.0.241,<=0.0.259"]
+QUALITY_REQUIRE = ["black~=23.1", "ruff==0.1.5"]
 
 BENCHMARK_REQUIRE = ["optuna", "tqdm", "scikit-learn", "seqeval", "torchvision", "evaluate>=0.2.0"]
 
@@ -60,17 +60,26 @@ EXTRAS_REQUIRE = {
     ],
     "exporters": ["onnx", "onnxruntime", "timm"],
     "exporters-gpu": ["onnx", "onnxruntime-gpu", "timm"],
-    "exporters-tf": ["tensorflow>=2.4,<=2.12.1", "tf2onnx", "onnx", "onnxruntime", "timm", "h5py", "numpy<1.24.0"],
+    "exporters-tf": [
+        "tensorflow>=2.4,<=2.12.1",
+        "tf2onnx",
+        "onnx",
+        "onnxruntime",
+        "timm",
+        "h5py",
+        "numpy<1.24.0",
+    ],
     "diffusers": ["diffusers"],
-    "intel": "optimum-intel>=1.11.0",
-    "openvino": "optimum-intel[openvino]>=1.11.0",
-    "nncf": "optimum-intel[nncf]>=1.11.0",
-    "neural-compressor": "optimum-intel[neural-compressor]>=1.11.0",
+    "intel": "optimum-intel>=1.12.0",
+    "openvino": "optimum-intel[openvino]>=1.12.0",
+    "nncf": "optimum-intel[nncf]>=1.12.0",
+    "neural-compressor": "optimum-intel[neural-compressor]>=1.12.0",
     "graphcore": "optimum-graphcore",
-    "habana": "optimum-habana",
+    "habana": ["optimum-habana", "transformers >= 4.33.0, < 4.35.0"],
     "neuron": "optimum-neuron[neuron]",
     "neuronx": "optimum-neuron[neuronx]",
     "furiosa": "optimum-furiosa",
+    "amd": "optimum-amd",
     "dev": TESTS_REQUIRE + QUALITY_REQUIRE,
     "tests": TESTS_REQUIRE,
     "quality": QUALITY_REQUIRE,

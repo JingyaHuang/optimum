@@ -38,6 +38,7 @@ from ...utils import (
 )
 from ..error_utils import AtolError, MinimumVersionError, OutputMatchError, ShapeError
 from .base import OnnxConfig
+from .model_configs import SpeechT5OnnxConfig
 from .utils import PickableInferenceSession, recursive_to_device
 
 
@@ -52,9 +53,6 @@ if is_diffusers_available():
 
 if is_tf_available():
     from transformers.modeling_tf_utils import TFPreTrainedModel
-
-
-mp.set_start_method("spawn", force=True)
 
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
@@ -145,7 +143,6 @@ def validate_models_outputs(
     if use_subprocess:
         logger.info("Validating models in subprocesses...")
     exceptions = []  # run all validations before raising
-    onnx_paths = []
     for i, model_name in enumerate(models_and_onnx_configs.keys()):
         submodel, sub_onnx_config = models_and_onnx_configs[model_name]
         onnx_model_path = (
@@ -153,7 +150,6 @@ def validate_models_outputs(
             if onnx_files_subpaths is not None
             else output_dir.joinpath(model_name + ".onnx")
         )
-        onnx_paths.append(onnx_model_path)
         try:
             # Model validation is done in subprocesses, as ONNX Runtime has the bad habit of
             # not releasing memory once an InferenceSession is initialized.
@@ -171,12 +167,12 @@ def validate_models_outputs(
                 model_kwargs=model_kwargs,
             )
         except Exception as e:
-            exceptions.append(e)
+            exceptions.append((onnx_model_path, e))
 
     if len(exceptions) != 0:
         for i, exception in enumerate(exceptions[:-1]):
-            logger.error(f"Validation {i} for the model {onnx_paths[i].as_posix()} raised: {exception}")
-        raise exceptions[-1]
+            logger.error(f"Validation for the model {exception[0].as_posix()} raised: {exception[1]}")
+        raise exceptions[-1][1]
 
 
 def validate_model_outputs(
@@ -217,6 +213,9 @@ def validate_model_outputs(
         ValueError: If the outputs shapes or values do not match between the reference and the exported model.
     """
     if use_subprocess:
+        # InferenceSession do not support the fork start method with some EP: https://github.com/microsoft/onnxruntime/issues/7846
+        mp.set_start_method("spawn", force=True)
+
         io_process = ValidationProcess(
             config, reference_model, onnx_model, onnx_named_outputs, atol, input_shapes, device, dtype, model_kwargs
         )
@@ -268,7 +267,6 @@ def _run_validation(
     if input_shapes is None:
         input_shapes = {}  # will use the defaults from DEFAULT_DUMMY_SHAPES
     reference_model_inputs = config.generate_dummy_inputs(framework=framework, **input_shapes)
-    reference_model_inputs = config.rename_ambiguous_inputs(reference_model_inputs)
 
     # Create ONNX Runtime session
     session_options = SessionOptions()
@@ -323,6 +321,7 @@ def _run_validation(
 
     # Some models may modify in place the inputs, hence the copy.
     copy_reference_model_inputs = copy.deepcopy(reference_model_inputs)
+    copy_reference_model_inputs = config.rename_ambiguous_inputs(copy_reference_model_inputs)
 
     with config.patch_model_for_export(reference_model, model_kwargs=model_kwargs):
         if is_torch_available() and isinstance(reference_model, nn.Module):
@@ -423,9 +422,11 @@ def _run_validation(
 
     if value_failures:
         msg = "\n".join(f"- {t[0]}: max diff = {t[1]}" for t in value_failures)
-        raise AtolError(
-            f"The maximum absolute difference between the output of the reference model and the ONNX exported model is not within the set tolerance {atol}:\n{msg}"
-        )
+        atol_msg = f"The maximum absolute difference between the output of the reference model and the ONNX exported model is not within the set tolerance {atol}:\n{msg}"
+
+        if isinstance(config, SpeechT5OnnxConfig):
+            atol_msg += "\nIMPORTANT NOTE: SpeechT5 uses a dropout at inference and the output validation of ONNX Runtime inference vs PyTorch is expected to fail. Reference: https://github.com/huggingface/transformers/blob/v4.33.2/src/transformers/models/speecht5/modeling_speecht5.py#L727"
+        raise AtolError(atol_msg)
 
 
 class ValidationProcess(mp.Process):
@@ -526,7 +527,7 @@ def export_pytorch(
 
     with torch.no_grad():
         model.config.return_dict = True
-        model.eval()
+        model = model.eval()
 
         # Check if we need to override certain configuration item
         if config.values_override is not None:
@@ -634,7 +635,7 @@ def export_tensorflow(
             The version of the ONNX operator set to use.
         output (`Path`):
             Directory to store the exported ONNX model.
-        device (`str`, *optional*, defaults to `cpu`):
+        device (`Optional[str]`, defaults to `"cpu"`):
             The device on which the ONNX model will be exported. Either `cpu` or `cuda`. Only PyTorch is supported for
             export on CUDA devices.
 
@@ -789,7 +790,7 @@ def export(
             Directory to store the exported ONNX model.
         opset (`Optional[int]`, defaults to `None`):
             The version of the ONNX operator set to use.
-        device (`str`, *optional*, defaults to `cpu`):
+        device (`Optional[str]`, defaults to `"cpu"`):
             The device on which the ONNX model will be exported. Either `cpu` or `cuda`. Only PyTorch is supported for
             export on CUDA devices.
         input_shapes (`Optional[Dict]`, defaults to `None`):

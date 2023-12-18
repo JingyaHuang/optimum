@@ -35,7 +35,7 @@ else:
 TORCH_MINIMUM_VERSION = packaging.version.parse("1.11.0")
 TRANSFORMERS_MINIMUM_VERSION = packaging.version.parse("4.25.0")
 DIFFUSERS_MINIMUM_VERSION = packaging.version.parse("0.18.0")
-AUTOGPTQ_MINIMUM_VERSION = packaging.version.parse("0.4.2")
+AUTOGPTQ_MINIMUM_VERSION = packaging.version.parse("0.4.99")  # Allows 0.5.0.dev0
 
 
 # This is the minimal required version to support some ONNX Runtime features
@@ -48,7 +48,8 @@ _pydantic_available = importlib.util.find_spec("pydantic") is not None
 _accelerate_available = importlib.util.find_spec("accelerate") is not None
 _diffusers_available = importlib.util.find_spec("diffusers") is not None
 _auto_gptq_available = importlib.util.find_spec("auto_gptq") is not None
-_timm_available = importlib.util.find_spec("diffusers") is not None
+_timm_available = importlib.util.find_spec("timm") is not None
+_sentence_transformers_available = importlib.util.find_spec("sentence_transformers") is not None
 
 torch_version = None
 if is_torch_available():
@@ -107,14 +108,18 @@ def is_timm_available():
     return _timm_available
 
 
+def is_sentence_transformers_available():
+    return _sentence_transformers_available
+
+
 def is_auto_gptq_available():
     if _auto_gptq_available:
         version_autogptq = packaging.version.parse(importlib_metadata.version("auto_gptq"))
-        if AUTOGPTQ_MINIMUM_VERSION <= version_autogptq:
+        if AUTOGPTQ_MINIMUM_VERSION < version_autogptq:
             return True
         else:
             raise ImportError(
-                f"Found an incompatible version of auto-gptq. Found version {version_autogptq}, but only {AUTOGPTQ_MINIMUM_VERSION} and above are supported"
+                f"Found an incompatible version of auto-gptq. Found version {version_autogptq}, but only version above {AUTOGPTQ_MINIMUM_VERSION} are supported"
             )
 
 
@@ -200,6 +205,10 @@ BACKENDS_MAPPING = OrderedDict(
         (
             "transformers_432",
             (lambda: check_if_transformers_greater("4.32"), "{0} " + TRANSFORMERS_IMPORT_ERROR.format("4.32")),
+        ),
+        (
+            "transformers_434",
+            (lambda: check_if_transformers_greater("4.34"), "{0} " + TRANSFORMERS_IMPORT_ERROR.format("4.34")),
         ),
     ]
 )
